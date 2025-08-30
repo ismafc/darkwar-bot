@@ -44,7 +44,7 @@ const TOLERANCIA_PIXEL_MAS_VERDE = 0.05         // Y también este porcentaje
 const TOLERANCIA_COLOR_PARTIR uint32 = 20000    // Puedes ajustar esta tolerancia si es necesario
 const TOLERANCIA_PIXEL_PARTIR = 0.01            // Y también este porcentaje
 
-var AREA_BUSQUEDA_REUNION = image.Rect(2408, 1231, 2413, 1237)
+var AREA_BUSQUEDA_REUNION = image.Rect(2408, 1090, 2413, 1237)
 var AREA_BUSQUEDA_BOTON_PARTIR = image.Rect(1853, 1494, 1873, 1514)
 var AREA_OCR_REUNION = image.Rect(2380, 1293, 2490, 1323)
 
