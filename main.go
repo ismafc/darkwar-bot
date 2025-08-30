@@ -57,6 +57,15 @@ const (
 
 var AREA_BUSQUEDA_BOTON_VERDE_INICIAL = image.Rect(2300, 420, 2320, 440)
 
+// --- CONFIGURACIÓN DE ACCIONES INICIALES ---
+const (
+	ANCHO_PANTALLA            = 3840
+	Y_INICIAL_OPCIONES_EVENTO = 175
+	ALTO_OPCION_EVENTO        = 410
+	ANCHO_OPCION_EVENTO       = 1090
+	ESPACIO_OPCION_EVENTO     = 27
+)
+
 // --- HELPERS ---
 // absDiff calcula la diferencia absoluta entre dos valores uint32.
 func absDiff(x, y uint32) uint32 {
@@ -381,6 +390,69 @@ func buscarReunion(wg *sync.WaitGroup, done <-chan bool, pausarAyuda chan bool) 
 	}
 }
 
+// --- LÓGICA DE PREPARACIÓN ---
+
+// clickOpcionEvento calcula y hace clic en una opción de la lista de eventos.
+func clickOpcionEvento(opcion int) {
+	// La X se calcula como el centro horizontal de la pantalla.
+	clickX := ANCHO_PANTALLA / 2
+	// La Y se calcula según la fórmula proporcionada.
+	clickY := Y_INICIAL_OPCIONES_EVENTO + (ALTO_OPCION_EVENTO+ESPACIO_OPCION_EVENTO)*opcion + (ALTO_OPCION_EVENTO / 2)
+
+	fmt.Printf("Haciendo clic en la opción de evento %d en (%d, %d).\n", opcion+1, clickX, clickY)
+	robotgo.Move(clickX, clickY)
+	robotgo.Click()
+}
+
+// prepararReuniones realiza los clics iniciales para llegar a la pantalla de reuniones.
+func deshabilitarReunionesAutomaticas() {
+	fmt.Println("Iniciando secuencia de preparación de reuniones...")
+
+	// 1. Clic en 'Eventos Regulares'
+	fmt.Println("Paso 1: Clic en 'Eventos Regulares' en (2440, 1400).")
+	robotgo.Move(2440, 1400)
+	robotgo.Click()
+	time.Sleep(1 * time.Second) // Pausa para que la UI responda
+
+	// 2. Clic en la segunda opción ('Reunión de Zombies')
+	// Usamos el índice 1 para la segunda opción (0-indexed).
+	fmt.Println("Paso 2: Clic en la segunda opción del menú de eventos.")
+	clickOpcionEvento(1)
+	time.Sleep(1 * time.Second) // Pausa para que la UI responda
+
+	// 3. Clic en 'Reuniones Automáticas'
+	fmt.Println("Paso 3: Clic en 'Reuniones Automáticas' en (1920, 2040).")
+	robotgo.Move(1920, 2040)
+	robotgo.Click()
+	time.Sleep(1 * time.Second) // Pausa para que la UI responda
+
+	// 4. Clic en el botón 'Cerrar' (Reuniones automáticas)
+	fmt.Println("Paso 4: Clic en 'Cerrar' en (1650, 1630).")
+	robotgo.Move(1650, 1630)
+	robotgo.Click()
+	time.Sleep(1 * time.Second) // Pausa para que la UI responda
+
+	// 5. Clic en la 'X' (cerrar ventana)
+	fmt.Println("Paso 5: Clic en la 'X' para cerrar la ventana (2345, 450).")
+	robotgo.Move(2345, 450)
+	robotgo.Click()
+	time.Sleep(1 * time.Second) // Pausa para que la UI responda
+
+	// 6. Clic en el botón 'Atrás' (flecha a la izquierda)
+	fmt.Println("Paso 6: Clic en 'Atrás' para salir de 'Asedio Al Gigante' (1400, 2040).")
+	robotgo.Move(1400, 2040)
+	robotgo.Click()
+	time.Sleep(1 * time.Second) // Pausa para que la UI responda
+
+	// 7. Clic en el botón 'Atrás' (flecha a la izquierda)
+	fmt.Println("Paso 7: Clic en 'Atrás' para salir de 'Eventos Regulares' (1400, 2040).")
+	robotgo.Move(1400, 2040)
+	robotgo.Click()
+	time.Sleep(1 * time.Second) // Pausa para que la UI responda
+
+	fmt.Println("Secuencia de preparación de reuniones finalizada.")
+}
+
 // --- FUNCIÓN PRINCIPAL ---
 
 func main() {
@@ -389,6 +461,8 @@ func main() {
 	fmt.Println("========================================")
 	fmt.Println("El bot comenzará en 5 segundos...")
 	time.Sleep(5 * time.Second)
+
+	deshabilitarReunionesAutomaticas()
 
 	var wg sync.WaitGroup
 	done := make(chan bool)
