@@ -94,6 +94,19 @@ func esTextoDeContador(texto string) bool {
 	return strings.Contains(texto, ":")
 }
 
+// normalizarTexto convierte un texto a minúsculas y le quita los acentos.
+func normalizarTexto(s string) string {
+	lower := strings.ToLower(s)
+	replacer := strings.NewReplacer(
+		"á", "a",
+		"é", "e",
+		"í", "i",
+		"ó", "o",
+		"ú", "u",
+	)
+	return replacer.Replace(lower)
+}
+
 // --- LÓGICA DE BÚSQUEDA MANUAL ---
 
 // buscarIcono itera sobre un área específica de la pantalla para encontrar el icono,
@@ -582,14 +595,14 @@ func obtenerReunionesPendientes(tipoReunion string) int {
 			fmt.Printf("Error de OCR en el título de la tarjeta %d: %v\n", i, err)
 			continue
 		}
-		textoTitulo = strings.TrimSpace(textoTitulo)
+		textoTitulo = normalizarTexto(strings.TrimSpace(textoTitulo))
 
 		if DEBUG_MODE {
 			fmt.Printf("Tarjeta %d: Título leído: '%s'\n", i, textoTitulo)
 		}
 
-		// Si el título coincide con el que buscamos
-		if strings.Contains(textoTitulo, tipoReunion) {
+		// Si el título coincide con el que buscamos (ignorando mayúsculas/minúsculas)
+		if strings.Contains(strings.ToLower(textoTitulo), strings.ToLower(tipoReunion)) {
 			fmt.Printf("Encontrada tarjeta para '%s'. Leyendo recompensas...\n", tipoReunion)
 
 			// --- Leer el texto de la recompensa ---
@@ -697,9 +710,9 @@ func main() {
 
 	reuniones_zg := obtenerReunionesPendientes("Zombi Gigante")
 	fmt.Println("Quedan " + strconv.Itoa(reuniones_zg) + " reuniones de Zombies Gigantes.")
-	reuniones_zm := obtenerReunionesPendientes("Zombi Monia [Gigante]")
+	reuniones_zm := obtenerReunionesPendientes("Zombi Momia [Gigante]")
 	fmt.Println("Quedan " + strconv.Itoa(reuniones_zm) + " reuniones de Zombies Monias Gigantes.")
-	reuniones_cv := obtenerReunionesPendientes("Caza con Víctor")
+	reuniones_cv := obtenerReunionesPendientes("Caza con Victor")
 	fmt.Println("Quedan " + strconv.Itoa(reuniones_cv) + " reuniones de Caza con Víctor.")
 
 	deshabilitarReunionesAutomaticas()
