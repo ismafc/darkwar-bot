@@ -7,6 +7,7 @@ import (
 	"image/draw"
 	"image/png"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -56,6 +57,20 @@ const (
 )
 
 var AREA_BUSQUEDA_BOTON_VERDE_INICIAL = image.Rect(2300, 420, 2320, 440)
+
+// --- CONFIGURACIÓN DE LECTURA DE REUNIONES AUTOMÁTICAS ---
+const (
+	CARD_HEIGHT           = 275
+	CARD_SPACING          = 25
+	FIRST_CARD_Y          = 615
+	CARD_TITLE_X_START    = 1710
+	CARD_TITLE_X_END      = 2365
+	CARD_TITLE_HEIGHT     = 56
+	CARD_REWARD_HEIGHT    = 32
+	NUM_CARDS_TO_CHECK    = 4
+	REWARD_TEXT_PREFIX    = "Recompensas por unirse a la reunión:"
+	REWARD_TEXT_SEPARATOR = "/"
+)
 
 // --- CONFIGURACIÓN DE ACCIONES INICIALES ---
 const (
@@ -502,6 +517,175 @@ func habilitarReunionesAutomaticas() {
 	fmt.Println("Secuencia de preparación de reuniones finalizada.")
 }
 
+// obtenerReunionesPendientes busca el número de reuniones pendientes para un tipo específico.
+func obtenerReunionesPendientes(tipoReunion string) int {
+	fmt.Printf("Iniciando obtención de reuniones pendientes para: %s\n", tipoReunion)
+	reunionesPendientes := 0
+
+	// 1. Clic en 'Eventos Regulares'
+	robotgo.Move(2440, 1400)
+	robotgo.Click()
+	time.Sleep(1 * time.Second)
+
+	// 2. Clic en la segunda opción ('Reunión de Zombies')
+	clickOpcionEvento(1)
+	time.Sleep(1 * time.Second)
+
+	// 3. Clic en 'Reuniones Automáticas'
+	robotgo.Move(1920, 2040)
+	robotgo.Click()
+	time.Sleep(1 * time.Second)
+
+	// --- Lógica de lectura de tarjetas ---
+	clientOCR := gosseract.NewClient()
+	defer clientOCR.Close()
+	clientOCR.SetLanguage("spa") // Asumimos que el texto está en español
+
+	for i := 0; i < NUM_CARDS_TO_CHECK; i++ {
+		cardY := FIRST_CARD_Y + i*(CARD_HEIGHT+CARD_SPACING)
+
+		// --- Leer el título de la tarjeta ---
+		titleRect := image.Rect(CARD_TITLE_X_START, cardY, CARD_TITLE_X_END, cardY+CARD_TITLE_HEIGHT)
+		imgTituloBitmap := robotgo.CaptureScreen(titleRect.Min.X, titleRect.Min.Y, titleRect.Dx(), titleRect.Dy())
+		imgTitulo := robotgo.ToImage(imgTituloBitmap)
+
+		// Pre-procesamiento de la imagen del título (similar a como se hace con el contador)
+		// Esto mejora la precisión del OCR.
+		// 1. Redimensionar
+		nuevoAncho := uint(imgTitulo.Bounds().Dx() * 2)
+		nuevoAlto := uint(imgTitulo.Bounds().Dy() * 2)
+		imgRedimensionada := resize.Resize(nuevoAncho, nuevoAlto, imgTitulo, resize.Bicubic)
+		// 2. Binarizar e invertir
+		bounds := imgRedimensionada.Bounds()
+		imgProcesada := image.NewGray(bounds)
+		umbral := uint8(210)
+		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+			for x := bounds.Min.X; x < bounds.Max.X; x++ {
+				grayColor := color.GrayModel.Convert(imgRedimensionada.At(x, y)).(color.Gray)
+				if grayColor.Y > umbral {
+					imgProcesada.Set(x, y, color.Black)
+				} else {
+					imgProcesada.Set(x, y, color.White)
+				}
+			}
+		}
+
+		if DEBUG_MODE {
+			imgo.Save("titulo_tarjeta_redimensionado.png", imgRedimensionada)
+			imgo.Save("titulo_tarjeta_para_ocr.png", imgProcesada)
+		}
+
+		// OCR al título
+		clientOCR.SetImageFromBytes(imgToBytes(imgProcesada))
+		textoTitulo, err := clientOCR.Text()
+		if err != nil {
+			fmt.Printf("Error de OCR en el título de la tarjeta %d: %v\n", i, err)
+			continue
+		}
+		textoTitulo = strings.TrimSpace(textoTitulo)
+
+		if DEBUG_MODE {
+			fmt.Printf("Tarjeta %d: Título leído: '%s'\n", i, textoTitulo)
+		}
+
+		// Si el título coincide con el que buscamos
+		if strings.Contains(textoTitulo, tipoReunion) {
+			fmt.Printf("Encontrada tarjeta para '%s'. Leyendo recompensas...\n", tipoReunion)
+
+			// --- Leer el texto de la recompensa ---
+			rewardY := cardY + CARD_TITLE_HEIGHT
+			rewardRect := image.Rect(CARD_TITLE_X_START, rewardY, CARD_TITLE_X_END, rewardY+CARD_REWARD_HEIGHT)
+			imgRecompensaBitmap := robotgo.CaptureScreen(rewardRect.Min.X, rewardRect.Min.Y, rewardRect.Dx(), rewardRect.Dy())
+			imgRecompensa := robotgo.ToImage(imgRecompensaBitmap)
+
+			// Pre-procesamiento similar para la imagen de la recompensa
+			nuevoAnchoR := uint(imgRecompensa.Bounds().Dx() * 2)
+			nuevoAltoR := uint(imgRecompensa.Bounds().Dy() * 2)
+			imgRedimensionadaR := resize.Resize(nuevoAnchoR, nuevoAltoR, imgRecompensa, resize.Bicubic)
+			boundsR := imgRedimensionadaR.Bounds()
+			imgProcesadaR := image.NewGray(boundsR)
+			for y := boundsR.Min.Y; y < boundsR.Max.Y; y++ {
+				for x := boundsR.Min.X; x < boundsR.Max.X; x++ {
+					grayColor := color.GrayModel.Convert(imgRedimensionadaR.At(x, y)).(color.Gray)
+					if grayColor.Y > 160 {
+						imgProcesadaR.Set(x, y, color.Black)
+					} else {
+						imgProcesadaR.Set(x, y, color.White)
+					}
+				}
+			}
+
+			if DEBUG_MODE {
+				imgo.Save("info_tarjeta_redimensionado.png", imgRedimensionadaR)
+				imgo.Save("info_tarjeta_para_ocr.png", imgProcesadaR)
+			}
+
+			// OCR al texto de recompensa
+			clientOCR.SetImageFromBytes(imgToBytes(imgProcesadaR))
+			textoRecompensa, err := clientOCR.Text()
+			if err != nil {
+				fmt.Printf("Error de OCR en la recompensa: %v\n", err)
+				break // Salimos del bucle si hay un error aquí
+			}
+			textoRecompensa = strings.TrimSpace(textoRecompensa)
+			if DEBUG_MODE {
+				fmt.Printf("Texto de recompensa leído: '%s'\n", textoRecompensa)
+			}
+
+			// Parsear el texto "Recompensas por unirse a la reunión: N/M"
+			parts := strings.Split(textoRecompensa, REWARD_TEXT_PREFIX)
+			if len(parts) > 1 {
+				numerosStr := strings.TrimSpace(parts[1])
+				valores := strings.Split(numerosStr, REWARD_TEXT_SEPARATOR)
+				if len(valores) == 2 {
+					n, errN := strconv.Atoi(strings.TrimSpace(valores[0]))
+					m, errM := strconv.Atoi(strings.TrimSpace(valores[1]))
+					if errN == nil && errM == nil {
+						reunionesPendientes = m - n
+						fmt.Printf("Cálculo: %d - %d = %d reuniones pendientes.\n", m, n, reunionesPendientes)
+					}
+				}
+			}
+			break // Salimos del bucle porque ya encontramos la tarjeta
+		}
+	}
+
+	// 5. Clic en la 'X' (cerrar ventana de reuniones automáticas)
+	robotgo.Move(2345, 450)
+	robotgo.Click()
+	time.Sleep(1 * time.Second)
+
+	// 6. Clic en el botón 'Atrás' (salir de 'Asedio Al Gigante')
+	robotgo.Move(1400, 2040)
+	robotgo.Click()
+	time.Sleep(1 * time.Second)
+
+	// 7. Clic en el botón 'Atrás' (salir de 'Eventos Regulares')
+	robotgo.Move(1400, 2040)
+	robotgo.Click()
+	time.Sleep(1 * time.Second)
+
+	fmt.Printf("Finalizada obtención de reuniones. Pendientes: %d\n", reunionesPendientes)
+	return reunionesPendientes
+}
+
+// imgToBytes es una función helper para convertir image.Image a []byte para gosseract
+func imgToBytes(img image.Image) []byte {
+	tempFile, err := os.CreateTemp("", "ocr-helper-*.png")
+	if err != nil {
+		return nil
+	}
+	defer os.Remove(tempFile.Name())
+	defer tempFile.Close()
+
+	png.Encode(tempFile, img)
+	bytes, err := os.ReadFile(tempFile.Name())
+	if err != nil {
+		return nil
+	}
+	return bytes
+}
+
 // --- FUNCIÓN PRINCIPAL ---
 
 func main() {
@@ -510,6 +694,13 @@ func main() {
 	fmt.Println("========================================")
 	fmt.Println("El bot comenzará en 5 segundos...")
 	time.Sleep(5 * time.Second)
+
+	reuniones_zg := obtenerReunionesPendientes("Zombi Gigante")
+	fmt.Println("Quedan " + strconv.Itoa(reuniones_zg) + " reuniones de Zombies Gigantes.")
+	reuniones_zm := obtenerReunionesPendientes("Zombi Monia [Gigante]")
+	fmt.Println("Quedan " + strconv.Itoa(reuniones_zm) + " reuniones de Zombies Monias Gigantes.")
+	reuniones_cv := obtenerReunionesPendientes("Caza con Víctor")
+	fmt.Println("Quedan " + strconv.Itoa(reuniones_cv) + " reuniones de Caza con Víctor.")
 
 	deshabilitarReunionesAutomaticas()
 
