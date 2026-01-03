@@ -83,6 +83,7 @@ const (
 
 var AREA_BUSQUEDA_PANTALLA_INICIAL = image.Rect(2300, 2080, 2520, 2150)
 var POS_EVENTOS_REGULARES = image.Point{X: 1384, Y: 1484}
+var POS_CONFIRMAR_DESABILITAR_REUNIONES_AUTOMATICAS = image.Point{X: 2130, Y: 1350}
 
 // --- HELPERS ---
 // absDiff calcula la diferencia absoluta entre dos valores uint32.
@@ -460,6 +461,12 @@ func deshabilitarReunionesAutomaticas() {
 	// 4. Clic en el botón 'Cerrar' (Reuniones automáticas)
 	fmt.Println("Paso 4: Clic en 'Cerrar' en el centro de (1588, 1572) - (1785, 1640).")
 	robotgo.Move((1588+1785)/2, (1572+1640)/2)
+	robotgo.Click()
+	time.Sleep(1 * time.Second) // Pausa para que aparezca la confirmación
+
+	// 4b. Clic en el botón de confirmación
+	fmt.Println("Paso 4b: Clic en el botón de confirmación en (", POS_CONFIRMAR_DESABILITAR_REUNIONES_AUTOMATICAS.X, ",", POS_CONFIRMAR_DESABILITAR_REUNIONES_AUTOMATICAS.Y, ").")
+	robotgo.Move(POS_CONFIRMAR_DESABILITAR_REUNIONES_AUTOMATICAS.X, POS_CONFIRMAR_DESABILITAR_REUNIONES_AUTOMATICAS.Y)
 	robotgo.Click()
 	time.Sleep(1 * time.Second) // Pausa para que la UI responda
 
