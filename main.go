@@ -34,17 +34,13 @@ var AREA_BUSQUEDA_AYUDA = image.Rect(2290, 1545, 2310, 1545+20)
 // --- CONFIGURACIÓN TAREA: REUNIÓN ---
 const iconoReunionFile = "resources/reunion_icono.png"
 const iconoMasVerdeFile = "resources/mas_verde_icono.png"
-const iconoPartirFile = "resources/partir_icono.png"
-
 const TOLERANCIA_COLOR_REUNION uint32 = 30000   // Puedes ajustar esta tolerancia si es necesario
 const TOLERANCIA_PIXEL_REUNION = 0.05           // Y también este porcentaje
 const TOLERANCIA_COLOR_MAS_VERDE uint32 = 20000 // Puedes ajustar esta tolerancia si es necesario
 const TOLERANCIA_PIXEL_MAS_VERDE = 0.05         // Y también este porcentaje
-const TOLERANCIA_COLOR_PARTIR uint32 = 20000    // Puedes ajustar esta tolerancia si es necesario
-const TOLERANCIA_PIXEL_PARTIR = 0.01            // Y también este porcentaje
 
 var AREA_BUSQUEDA_REUNION = image.Rect(1490, 1735, 1770, 1755)
-var AREA_BUSQUEDA_BOTON_PARTIR = image.Rect(1836, 1355, 1856, 1375)
+var AREA_OCR_PARTIR = image.Rect(1836, 1355, 2015, 1420)
 var AREA_OCR_REUNION = image.Rect(2380, 1293, 2490, 1323)
 
 // --- CONFIGURACIÓN DE BÚSQUEDA OPTIMIZADA DE BOTÓN VERDE ---
@@ -240,7 +236,6 @@ func buscarReunion(wg *sync.WaitGroup, done <-chan bool, pausarAyuda chan bool) 
 	fmt.Println("-> Hilo de reunión INICIADO.")
 	iconoReunionImg, _ := imgo.Read(iconoReunionFile)
 	iconoMasVerdeImg, _ := imgo.Read(iconoMasVerdeFile)
-	iconoPartirImg, _ := imgo.Read(iconoPartirFile)
 
 	clientOCR := gosseract.NewClient()
 	defer clientOCR.Close()
@@ -253,10 +248,6 @@ func buscarReunion(wg *sync.WaitGroup, done <-chan bool, pausarAyuda chan bool) 
 	bIconoVerde := iconoMasVerdeImg.Bounds()
 	centroIconoVerdeX := bIconoVerde.Dx() / 2
 	centroIconoVerdeY := bIconoVerde.Dy() / 2
-
-	bIconoPartir := iconoPartirImg.Bounds()
-	centroIconoPartirX := bIconoPartir.Dx() / 2
-	centroIconoPartirY := bIconoPartir.Dy() / 2
 
 	for {
 		select {
@@ -383,16 +374,63 @@ func buscarReunion(wg *sync.WaitGroup, done <-chan bool, pausarAyuda chan bool) 
 
 						time.Sleep(1 * time.Second)
 
-						pantallaPartir := robotgo.ToImage(robotgo.CaptureScreen())
-						ptBotonPartir := buscarIcono(pantallaPartir, iconoPartirImg.(image.Image), AREA_BUSQUEDA_BOTON_PARTIR, TOLERANCIA_COLOR_REUNION, TOLERANCIA_PIXEL_REUNION)
-						if ptBotonPartir.X != -1 {
-							clickPartirX := ptBotonPartir.X + centroIconoPartirX
-							clickPartirY := ptBotonPartir.Y + centroIconoPartirY
-							fmt.Printf("      - Botón 'Partir' encontrado. Clic en centro (%d, %d).\n", clickPartirX, clickPartirY)
-							robotgo.Move(clickPartirX, clickPartirY)
-							robotgo.Click()
-						} else {
-							fmt.Println("      - No se encontró botón 'Partir'. Volviendo atrás.")
+						// --- Lógica OCR para el botón 'Partir' (Búsqueda en 3 posiciones) ---
+						encontradoPartir := false
+						for intento := 0; intento < 3; intento++ {
+							offsetY := intento * 120
+							rectPartir := image.Rect(
+								AREA_OCR_PARTIR.Min.X,
+								AREA_OCR_PARTIR.Min.Y+offsetY,
+								AREA_OCR_PARTIR.Max.X,
+								AREA_OCR_PARTIR.Max.Y+offsetY,
+							)
+
+							imgPartirBitmap := robotgo.CaptureScreen(rectPartir.Min.X, rectPartir.Min.Y, rectPartir.Dx(), rectPartir.Dy())
+							imgPartirOriginal := robotgo.ToImage(imgPartirBitmap)
+
+							if DEBUG_MODE {
+								imgo.Save(fmt.Sprintf("boton_partir_intento_%d.png", intento), imgPartirOriginal)
+							}
+
+							// Pre-procesamiento para el botón 'Partir'
+							nAnchoP := uint(imgPartirOriginal.Bounds().Dx() * 4)
+							nAltoP := uint(imgPartirOriginal.Bounds().Dy() * 4)
+							imgPartirResized := resize.Resize(nAnchoP, nAltoP, imgPartirOriginal, resize.Bicubic)
+
+							boundsP := imgPartirResized.Bounds()
+							imgPartirProcesada := image.NewGray(boundsP)
+							for y := boundsP.Min.Y; y < boundsP.Max.Y; y++ {
+								for x := boundsP.Min.X; x < boundsP.Max.X; x++ {
+									grayColor := color.GrayModel.Convert(imgPartirResized.At(x, y)).(color.Gray)
+									if grayColor.Y > 180 {
+										imgPartirProcesada.Set(x, y, color.Black)
+									} else {
+										imgPartirProcesada.Set(x, y, color.White)
+									}
+								}
+							}
+
+							clientOCR.SetImageFromBytes(imgToBytes(imgPartirProcesada))
+							clientOCR.SetWhitelist("") // Reset whitelist for text
+							clientOCR.SetLanguage("spa")
+							textoPartirRaw, _ := clientOCR.Text()
+							textoPartir := normalizarTexto(strings.TrimSpace(textoPartirRaw))
+
+							if strings.Contains(textoPartir, "partir") {
+								clickPartirX := rectPartir.Min.X + rectPartir.Dx()/2
+								clickPartirY := rectPartir.Min.Y + rectPartir.Dy()/2
+								fmt.Printf("      - Botón 'Partir' detectado por OCR en intento %d ('%s'). Clic en (%d, %d).\n", intento+1, textoPartir, clickPartirX, clickPartirY)
+								robotgo.Move(clickPartirX, clickPartirY)
+								robotgo.Click()
+								encontradoPartir = true
+								break
+							} else if DEBUG_MODE {
+								fmt.Printf("      - Intento %d: No se detectó 'Partir' (OCR: '%s').\n", intento+1, textoPartir)
+							}
+						}
+
+						if !encontradoPartir {
+							fmt.Println("      - No se detectó el texto 'Partir' en ninguna de las 3 posiciones. Volviendo atrás.")
 							robotgo.Move(2300, 1820)
 							robotgo.Click()
 							time.Sleep(1 * time.Second)
