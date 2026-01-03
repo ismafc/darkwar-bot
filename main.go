@@ -81,6 +81,8 @@ const (
 	ESPACIO_OPCION_EVENTO     = 27
 )
 
+var AREA_BUSQUEDA_PANTALLA_INICIAL = image.Rect(2300, 2080, 2520, 2150)
+
 // --- HELPERS ---
 // absDiff calcula la diferencia absoluta entre dos valores uint32.
 func absDiff(x, y uint32) uint32 {
@@ -534,9 +536,10 @@ func habilitarReunionesAutomaticas() {
 func obtenerReunionesPendientes(tipoReunion string) int {
 	fmt.Printf("Iniciando obtención de reuniones pendientes para: %s\n", tipoReunion)
 	reunionesPendientes := 0
+	encontrado := false
 
 	// 1. Clic en 'Eventos Regulares'
-	robotgo.Move(2440, 1400)
+	robotgo.Move(1384, 1484)
 	robotgo.Click()
 	time.Sleep(1 * time.Second)
 
@@ -659,11 +662,17 @@ func obtenerReunionesPendientes(tipoReunion string) int {
 					}
 				}
 			}
+			encontrado = true
 			break // Salimos del bucle porque ya encontramos la tarjeta
 		}
 	}
 
+	if !encontrado {
+		fmt.Printf("No se encontró la tarjeta para '%s' después de revisar %d tarjetas.\n", tipoReunion, NUM_CARDS_TO_CHECK)
+	}
+
 	// 5. Clic en la 'X' (cerrar ventana de reuniones automáticas)
+	fmt.Println("Regresando a la pantalla del mundo (Limpieza)...")
 	robotgo.Move(2345, 450)
 	robotgo.Click()
 	time.Sleep(1 * time.Second)
@@ -680,6 +689,75 @@ func obtenerReunionesPendientes(tipoReunion string) int {
 
 	fmt.Printf("Finalizada obtención de reuniones. Pendientes: %d\n", reunionesPendientes)
 	return reunionesPendientes
+}
+
+// irAlMundo verifica si el bot está en la pantalla "Mundo" o "Refugio".
+// Si está en "Refugio", hace clic para ir al "Mundo".
+func irAlMundo() {
+	fmt.Println("Navegando al Mundo...")
+
+	// 1. Capturar el área específica
+	rect := AREA_BUSQUEDA_PANTALLA_INICIAL
+	imgBitmap := robotgo.CaptureScreen(rect.Min.X, rect.Min.Y, rect.Dx(), rect.Dy())
+	imgOriginal := robotgo.ToImage(imgBitmap)
+
+	// 2. Pre-procesamiento
+	nuevoAncho := uint(imgOriginal.Bounds().Dx() * 4)
+	nuevoAlto := uint(imgOriginal.Bounds().Dy() * 4)
+	imgRedimensionada := resize.Resize(nuevoAncho, nuevoAlto, imgOriginal, resize.Bicubic)
+
+	bounds := imgRedimensionada.Bounds()
+	imgProcesada := image.NewGray(bounds)
+	umbral := uint8(180)
+
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			grayColor := color.GrayModel.Convert(imgRedimensionada.At(x, y)).(color.Gray)
+			if grayColor.Y > umbral {
+				imgProcesada.Set(x, y, color.Black)
+			} else {
+				imgProcesada.Set(x, y, color.White)
+			}
+		}
+	}
+
+	// 3. OCR
+	clientOCR := gosseract.NewClient()
+	defer clientOCR.Close()
+	clientOCR.SetLanguage("spa")
+	clientOCR.SetImageFromBytes(imgToBytes(imgProcesada))
+
+	texto, err := clientOCR.Text()
+	if err != nil {
+		fmt.Printf("Error de OCR al identificar pantalla: %v\n", err)
+		os.Exit(1)
+	}
+
+	textoNormalizado := normalizarTexto(strings.TrimSpace(texto))
+
+	if DEBUG_MODE {
+		fmt.Printf("Texto detectado en el botón de cambio de pantalla: '%s'\n", textoNormalizado)
+		imgo.Save("identificacion_pantalla_redimensionada.png", imgRedimensionada)
+		imgo.Save("identificacion_pantalla_ocr.png", imgProcesada)
+	}
+
+	if strings.Contains(textoNormalizado, "mundo") {
+		// Estamos en el Refugio, el botón dice "Mundo"
+		fmt.Println("Estamos en REFUGIO. Navegando a MUNDO...")
+		// Calculamos el centro del área para hacer clic
+		clickX := rect.Min.X + (rect.Dx() / 2)
+		clickY := rect.Min.Y + (rect.Dy() / 2)
+		robotgo.Move(clickX, clickY)
+		robotgo.Click()
+		time.Sleep(2 * time.Second) // Espera para que cargue el mundo
+	} else if strings.Contains(textoNormalizado, "refugio") {
+		// Ya estamos en el Mundo, el botón dice "Refugio"
+		fmt.Println("Ya estamos en MUNDO. No es necesario navegar.")
+	} else {
+		fmt.Printf("Error: No se ha podido identificar la pantalla inicial (Texto detectado: '%s').\n", textoNormalizado)
+		fmt.Println("El bot solo puede iniciarse desde las pantallas 'Mundo' o 'Refugio'.")
+		os.Exit(1)
+	}
 }
 
 // imgToBytes es una función helper para convertir image.Image a []byte para gosseract
@@ -708,10 +786,14 @@ func main() {
 	fmt.Println("El bot comenzará en 5 segundos...")
 	time.Sleep(5 * time.Second)
 
+	irAlMundo()
+
 	reuniones_zg := obtenerReunionesPendientes("Zombi Gigante")
 	fmt.Println("Quedan " + strconv.Itoa(reuniones_zg) + " reuniones de Zombies Gigantes.")
 	reuniones_zm := obtenerReunionesPendientes("Zombi Momia [Gigante]")
 	fmt.Println("Quedan " + strconv.Itoa(reuniones_zm) + " reuniones de Zombies Monias Gigantes.")
+	reuniones_zt := obtenerReunionesPendientes("Zombis de la tundra")
+	fmt.Println("Quedan " + strconv.Itoa(reuniones_zt) + " reuniones de Zombies de la Tundra.")
 	reuniones_cv := obtenerReunionesPendientes("Caza con Victor")
 	fmt.Println("Quedan " + strconv.Itoa(reuniones_cv) + " reuniones de Caza con Víctor.")
 
