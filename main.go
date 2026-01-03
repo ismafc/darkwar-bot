@@ -419,8 +419,21 @@ func buscarReunion(wg *sync.WaitGroup, done <-chan bool, pausarAyuda chan bool) 
 							if strings.Contains(textoPartir, "partir") {
 								clickPartirX := rectPartir.Min.X + rectPartir.Dx()/2
 								clickPartirY := rectPartir.Min.Y + rectPartir.Dy()/2
-								fmt.Printf("      - Botón 'Partir' detectado por OCR en intento %d ('%s'). Clic en (%d, %d).\n", intento+1, textoPartir, clickPartirX, clickPartirY)
-								robotgo.Move(clickPartirX, clickPartirY)
+
+								// --- Comprobar si el botón está habilitado (Color en 0,0) ---
+								r, g, b, _ := imgPartirOriginal.At(0, 0).RGBA()
+								// En robotgo/image, RGBA() devuelve valores de 16 bits.
+								// Para simplificar, comparamos si el componente Verde es dominante.
+								esVerde := g > r && g > b
+
+								if esVerde {
+									fmt.Printf("      - Botón 'Partir' habilitado (VERDE) detectado en intento %d. Haciendo clic en (%d, %d).\n", intento+1, clickPartirX, clickPartirY)
+									robotgo.Move(clickPartirX, clickPartirY)
+								} else {
+									fmt.Printf("      - Botón 'Partir' deshabilitado (GRIS) detectado en intento %d. Saliendo...\n", intento+1)
+									robotgo.Move(clickPartirX, 0)
+								}
+
 								robotgo.Click()
 								encontradoPartir = true
 								break
