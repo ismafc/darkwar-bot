@@ -29,7 +29,7 @@ var GUARDAR_PRIMERA_CAPTURA_AYUDA = true
 const TOLERANCIA_COLOR uint32 = 20000
 const TOLERANCIA_PIXEL_PORCENTAJE = 0.1
 
-var AREA_BUSQUEDA_AYUDA = image.Rect(2290, 1500, 2310, 1520)
+var AREA_BUSQUEDA_AYUDA = image.Rect(2290, 1545, 2310, 1545+20)
 
 // --- CONFIGURACIÓN TAREA: REUNIÓN ---
 const iconoReunionFile = "resources/reunion_icono.png"
