@@ -36,8 +36,6 @@ const iconoReunionFile = "resources/reunion_icono.png"
 const iconoMasVerdeFile = "resources/mas_verde_icono.png"
 const iconoPartirFile = "resources/partir_icono.png"
 
-var GUARDAR_PRIMERA_CAPTURA_REUNION = true
-
 const TOLERANCIA_COLOR_REUNION uint32 = 30000   // Puedes ajustar esta tolerancia si es necesario
 const TOLERANCIA_PIXEL_REUNION = 0.05           // Y también este porcentaje
 const TOLERANCIA_COLOR_MAS_VERDE uint32 = 20000 // Puedes ajustar esta tolerancia si es necesario
@@ -45,8 +43,8 @@ const TOLERANCIA_PIXEL_MAS_VERDE = 0.05         // Y también este porcentaje
 const TOLERANCIA_COLOR_PARTIR uint32 = 20000    // Puedes ajustar esta tolerancia si es necesario
 const TOLERANCIA_PIXEL_PARTIR = 0.01            // Y también este porcentaje
 
-var AREA_BUSQUEDA_REUNION = image.Rect(2408, 1090, 2413, 1237)
-var AREA_BUSQUEDA_BOTON_PARTIR = image.Rect(1853, 1494, 1873, 1514)
+var AREA_BUSQUEDA_REUNION = image.Rect(1490, 1735, 1770, 1755)
+var AREA_BUSQUEDA_BOTON_PARTIR = image.Rect(1836, 1355, 1856, 1375)
 var AREA_OCR_REUNION = image.Rect(2380, 1293, 2490, 1323)
 
 // --- CONFIGURACIÓN DE BÚSQUEDA OPTIMIZADA DE BOTÓN VERDE ---
@@ -268,18 +266,20 @@ func buscarReunion(wg *sync.WaitGroup, done <-chan bool, pausarAyuda chan bool) 
 		default:
 			bitmap := robotgo.CaptureScreen()
 			pantallaImg := robotgo.ToImage(bitmap)
-			if GUARDAR_PRIMERA_CAPTURA_REUNION {
+			if DEBUG_MODE {
 				imgo.Save("primera_captura_reunion.png", pantallaImg)
-				GUARDAR_PRIMERA_CAPTURA_REUNION = false
 			}
 			pt := buscarIcono(pantallaImg, iconoReunionImg.(image.Image), AREA_BUSQUEDA_REUNION, TOLERANCIA_COLOR_REUNION, TOLERANCIA_PIXEL_REUNION)
 
 			if pt.X != -1 {
-				rectOCR := AREA_OCR_REUNION
+				rectOCR := image.Rect(pt.X-40, pt.Y+iconoReunionImg.Bounds().Dy()+10, pt.X+iconoReunionImg.Bounds().Dx()+40, pt.Y+iconoReunionImg.Bounds().Dy()+40)
 				imgContadorCBitmap := robotgo.CaptureScreen(rectOCR.Min.X, rectOCR.Min.Y, rectOCR.Dx(), rectOCR.Dy())
 
 				// Convertimos la captura a una imagen estándar de Go.
 				imgContadorOriginal := robotgo.ToImage(imgContadorCBitmap)
+				if DEBUG_MODE {
+					imgo.Save("captura_contador.png", imgContadorOriginal)
+				}
 
 				// --- INICIO DEL PRE-PROCESADO DE IMAGEN (NUEVO ORDEN) ---
 
