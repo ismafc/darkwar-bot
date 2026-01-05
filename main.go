@@ -19,7 +19,7 @@ import (
 )
 
 // --- CONFIGURACIÓN GENERAL ---
-const DEBUG_MODE = true
+var DEBUG_MODE = false // Se inicializa en main() desde variable de entorno
 
 // --- CONFIGURACIÓN TAREA: AYUDAR ALIADOS ---
 const iconoAyudaFile = "resources/ayuda_icono.png"
@@ -856,10 +856,13 @@ func imgToBytes(img image.Image) []byte {
 // --- FUNCIÓN PRINCIPAL ---
 
 func main() {
-	fmt.Println("========================================")
-	fmt.Println("   BOT PARA DARK WAR SURVIVAL (v9 - Secuencia 'Partir')")
-	fmt.Println("========================================")
-	fmt.Println("El bot comenzará en 5 segundos...")
+	// Inicializar DEBUG_MODE desde variable de entorno
+	if os.Getenv("DEBUG_MODE") == "true" {
+		DEBUG_MODE = true
+		fmt.Println("!!! MODO DEPUREACIÓN ACTIVADO (via variable de entorno) !!!")
+	}
+
+	fmt.Println("Iniciando Dark War Bot en 5 segundos...")
 	time.Sleep(5 * time.Second)
 
 	irAlMundo()
