@@ -78,6 +78,9 @@ const (
 var AREA_BUSQUEDA_PANTALLA_INICIAL = image.Rect(2300, 2080, 2520, 2150)
 var POS_EVENTOS_REGULARES = image.Point{X: 1384, Y: 1484}
 var POS_CONFIRMAR_DESABILITAR_REUNIONES_AUTOMATICAS = image.Point{X: 2130, Y: 1350}
+var POS_REUNIONES_AUTOMATICAS = image.Point{X: 1920, Y: 2040}
+var POS_CERRAR_VENTANA = image.Point{X: 2345, Y: 450}
+var POS_BOTON_ATRAS = image.Point{X: 1400, Y: 2040}
 
 // --- HELPERS ---
 // absDiff calcula la diferencia absoluta entre dos valores uint32.
@@ -103,6 +106,67 @@ func normalizarTexto(s string) string {
 		"ú", "u",
 	)
 	return replacer.Replace(lower)
+}
+
+// minInt devuelve el menor de dos enteros.
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// levenshteinDistance calcula la distancia de edición entre dos cadenas.
+func levenshteinDistance(s, t string) int {
+	m := len(s)
+	n := len(t)
+	d := make([][]int, m+1)
+	for i := range d {
+		d[i] = make([]int, n+1)
+		d[i][0] = i
+	}
+	for j := 1; j <= n; j++ {
+		d[0][j] = j
+	}
+	for j := 1; j <= n; j++ {
+		for i := 1; i <= m; i++ {
+			cost := 1
+			if s[i-1] == t[j-1] {
+				cost = 0
+			}
+			d[i][j] = minInt(d[i-1][j]+1, minInt(d[i][j-1]+1, d[i-1][j-1]+cost))
+		}
+	}
+	return d[m][n]
+}
+
+// esSimilar comprueba si el texto contiene una cadena similar al objetivo basándose en un umbral.
+func esSimilar(texto, objetivo string, umbral float64) bool {
+	texto = normalizarTexto(texto)
+	objetivo = normalizarTexto(objetivo)
+
+	// Caso base: si ya lo contiene literalmente
+	if strings.Contains(texto, objetivo) {
+		return true
+	}
+
+	// Si el objetivo es muy corto, exigimos coincidencia total
+	if len(objetivo) < 4 {
+		return strings.Contains(texto, objetivo)
+	}
+
+	distancia := levenshteinDistance(texto, objetivo)
+	maxLen := len(texto)
+	if len(objetivo) > maxLen {
+		maxLen = len(objetivo)
+	}
+
+	if maxLen == 0 {
+		return true
+	}
+
+	similitud := 1.0 - float64(distancia)/float64(maxLen)
+	return similitud >= umbral
 }
 
 // --- LÓGICA DE BÚSQUEDA MANUAL ---
@@ -260,7 +324,7 @@ func buscarReunion(wg *sync.WaitGroup, done <-chan bool, pausarAyuda chan bool) 
 			if DEBUG_MODE {
 				imgo.Save("primera_captura_reunion.png", pantallaImg)
 			}
-			pt := buscarIcono(pantallaImg, iconoReunionImg.(image.Image), AREA_BUSQUEDA_REUNION, TOLERANCIA_COLOR_REUNION, TOLERANCIA_PIXEL_REUNION)
+			pt := buscarIcono(pantallaImg, iconoReunionImg, AREA_BUSQUEDA_REUNION, TOLERANCIA_COLOR_REUNION, TOLERANCIA_PIXEL_REUNION)
 
 			if pt.X != -1 {
 				rectOCR := image.Rect(pt.X-40, pt.Y+iconoReunionImg.Bounds().Dy()+10, pt.X+iconoReunionImg.Bounds().Dx()+40, pt.Y+iconoReunionImg.Bounds().Dy()+40)
@@ -364,7 +428,7 @@ func buscarReunion(wg *sync.WaitGroup, done <-chan bool, pausarAyuda chan bool) 
 					time.Sleep(1 * time.Second)
 
 					pantallaReuniones := robotgo.ToImage(robotgo.CaptureScreen())
-					ptBotonVerde := buscarBotonVerdeEnTarjetas(pantallaReuniones, iconoMasVerdeImg.(image.Image))
+					ptBotonVerde := buscarBotonVerdeEnTarjetas(pantallaReuniones, iconoMasVerdeImg)
 					if ptBotonVerde.X != -1 {
 						clickVerdeX := ptBotonVerde.X + centroIconoVerdeX
 						clickVerdeY := ptBotonVerde.Y + centroIconoVerdeY
@@ -487,27 +551,51 @@ func clickOpcionEvento(opcion int) {
 	robotgo.Click()
 }
 
-// Deshabilita las reuniones automáticas
-func deshabilitarReunionesAutomaticas() {
-	fmt.Println("Iniciando secuencia de preparación de reuniones...")
-
+// abrirVentanaReunionesAutomaticas navega desde el mundo hasta la ventana de configuración de reuniones.
+func abrirVentanaReunionesAutomaticas() {
 	// 1. Clic en 'Eventos Regulares'
 	fmt.Println("Paso 1: Clic en 'Eventos Regulares' en (", POS_EVENTOS_REGULARES.X, ",", POS_EVENTOS_REGULARES.Y, ").")
 	robotgo.Move(POS_EVENTOS_REGULARES.X, POS_EVENTOS_REGULARES.Y)
 	robotgo.Click()
-	time.Sleep(1 * time.Second) // Pausa para que la UI responda
+	time.Sleep(1 * time.Second)
 
 	// 2. Clic en la segunda opción ('Reunión de Zombies')
-	// Usamos el índice 1 para la segunda opción (0-indexed).
 	fmt.Println("Paso 2: Clic en la segunda opción del menú de eventos.")
 	clickOpcionEvento(1)
-	time.Sleep(1 * time.Second) // Pausa para que la UI responda
+	time.Sleep(1 * time.Second)
 
 	// 3. Clic en 'Reuniones Automáticas'
-	fmt.Println("Paso 3: Clic en 'Reuniones Automáticas' en (1920, 2040).")
-	robotgo.Move(1920, 2040)
+	fmt.Println("Paso 3: Clic en 'Reuniones Automáticas' en (", POS_REUNIONES_AUTOMATICAS.X, ",", POS_REUNIONES_AUTOMATICAS.Y, ").")
+	robotgo.Move(POS_REUNIONES_AUTOMATICAS.X, POS_REUNIONES_AUTOMATICAS.Y)
 	robotgo.Click()
-	time.Sleep(1 * time.Second) // Pausa para que la UI responda
+	time.Sleep(1 * time.Second)
+}
+
+// regresarAlMundoDesdeReuniones navega de vuelta al mundo cerrando las ventanas de eventos.
+func regresarAlMundoDesdeReuniones() {
+	// 1. Clic en la 'X' (cerrar ventana)
+	fmt.Println("Paso Final 1: Clic en la 'X' para cerrar la ventana en (", POS_CERRAR_VENTANA.X, ",", POS_CERRAR_VENTANA.Y, ").")
+	robotgo.Move(POS_CERRAR_VENTANA.X, POS_CERRAR_VENTANA.Y)
+	robotgo.Click()
+	time.Sleep(1 * time.Second)
+
+	// 2. Clic en el botón 'Atrás' (Asedio al gigante / Reuniones)
+	fmt.Println("Paso Final 2: Clic en 'Atrás' para salir del menú de reuniones en (", POS_BOTON_ATRAS.X, ",", POS_BOTON_ATRAS.Y, ").")
+	robotgo.Move(POS_BOTON_ATRAS.X, POS_BOTON_ATRAS.Y)
+	robotgo.Click()
+	time.Sleep(1 * time.Second)
+
+	// 3. Clic en el botón 'Atrás' (Eventos Regulares)
+	fmt.Println("Paso Final 3: Clic en 'Atrás' para salir de 'Eventos Regulares' en (", POS_BOTON_ATRAS.X, ",", POS_BOTON_ATRAS.Y, ").")
+	robotgo.Move(POS_BOTON_ATRAS.X, POS_BOTON_ATRAS.Y)
+	robotgo.Click()
+	time.Sleep(1 * time.Second)
+}
+
+// Deshabilita las reuniones automáticas
+func deshabilitarReunionesAutomaticas() {
+	fmt.Println("Iniciando secuencia de deshabilitación de reuniones...")
+	abrirVentanaReunionesAutomaticas()
 
 	// 4. Clic en el botón 'Cerrar' (Reuniones automáticas)
 	fmt.Println("Paso 4: Clic en 'Cerrar' en el centro de (1588, 1572) - (1785, 1640).")
@@ -519,76 +607,25 @@ func deshabilitarReunionesAutomaticas() {
 	fmt.Println("Paso 4b: Clic en el botón de confirmación en (", POS_CONFIRMAR_DESABILITAR_REUNIONES_AUTOMATICAS.X, ",", POS_CONFIRMAR_DESABILITAR_REUNIONES_AUTOMATICAS.Y, ").")
 	robotgo.Move(POS_CONFIRMAR_DESABILITAR_REUNIONES_AUTOMATICAS.X, POS_CONFIRMAR_DESABILITAR_REUNIONES_AUTOMATICAS.Y)
 	robotgo.Click()
-	time.Sleep(1 * time.Second) // Pausa para que la UI responda
+	time.Sleep(1 * time.Second)
 
-	// 5. Clic en la 'X' (cerrar ventana)
-	fmt.Println("Paso 5: Clic en la 'X' para cerrar la ventana (2345, 450).")
-	robotgo.Move(2345, 450)
-	robotgo.Click()
-	time.Sleep(1 * time.Second) // Pausa para que la UI responda
-
-	// 6. Clic en el botón 'Atrás' (flecha a la izquierda)
-	fmt.Println("Paso 6: Clic en 'Atrás' para salir de 'Asedio Al Gigante' (1400, 2040).")
-	robotgo.Move(1400, 2040)
-	robotgo.Click()
-	time.Sleep(1 * time.Second) // Pausa para que la UI responda
-
-	// 7. Clic en el botón 'Atrás' (flecha a la izquierda)
-	fmt.Println("Paso 7: Clic en 'Atrás' para salir de 'Eventos Regulares' (1400, 2040).")
-	robotgo.Move(1400, 2040)
-	robotgo.Click()
-	time.Sleep(1 * time.Second) // Pausa para que la UI responda
-
-	fmt.Println("Secuencia de preparación de reuniones finalizada.")
+	regresarAlMundoDesdeReuniones()
+	fmt.Println("Secuencia de deshabilitación de reuniones finalizada.")
 }
 
 // Habilita las reuniones automáticas
 func habilitarReunionesAutomaticas() {
-	fmt.Println("Iniciando secuencia de preparación de reuniones...")
-
-	// 1. Clic en 'Eventos Regulares'
-	fmt.Println("Paso 1: Clic en 'Eventos Regulares' en (", POS_EVENTOS_REGULARES.X, ",", POS_EVENTOS_REGULARES.Y, ").")
-	robotgo.Move(POS_EVENTOS_REGULARES.X, POS_EVENTOS_REGULARES.Y)
-	robotgo.Click()
-	time.Sleep(1 * time.Second) // Pausa para que la UI responda
-
-	// 2. Clic en la segunda opción ('Reunión de Zombies')
-	// Usamos el índice 1 para la segunda opción (0-indexed).
-	fmt.Println("Paso 2: Clic en la segunda opción del menú de eventos.")
-	clickOpcionEvento(1)
-	time.Sleep(1 * time.Second) // Pausa para que la UI responda
-
-	// 3. Clic en 'Reuniones Automáticas'
-	fmt.Println("Paso 3: Clic en 'Reuniones Automáticas' en (1920, 2040).")
-	robotgo.Move(1920, 2040)
-	robotgo.Click()
-	time.Sleep(1 * time.Second) // Pausa para que la UI responda
+	fmt.Println("Iniciando secuencia de habilitación de reuniones...")
+	abrirVentanaReunionesAutomaticas()
 
 	// 4. Clic en el botón 'Abrir' (Reuniones automáticas)
 	fmt.Println("Paso 4: Clic en 'Abrir' en el centro de (2056, 1572) - (2221, 1640).")
 	robotgo.Move((2221+2056)/2, (1640+1572)/2)
 	robotgo.Click()
-	time.Sleep(1 * time.Second) // Pausa para que la UI responda
+	time.Sleep(1 * time.Second)
 
-	// 5. Clic en la 'X' (cerrar ventana)
-	fmt.Println("Paso 5: Clic en la 'X' para cerrar la ventana (2345, 450).")
-	robotgo.Move(2345, 450)
-	robotgo.Click()
-	time.Sleep(1 * time.Second) // Pausa para que la UI responda
-
-	// 6. Clic en el botón 'Atrás' (flecha a la izquierda)
-	fmt.Println("Paso 6: Clic en 'Atrás' para salir de 'Asedio Al Gigante' (1400, 2040).")
-	robotgo.Move(1400, 2040)
-	robotgo.Click()
-	time.Sleep(1 * time.Second) // Pausa para que la UI responda
-
-	// 7. Clic en el botón 'Atrás' (flecha a la izquierda)
-	fmt.Println("Paso 7: Clic en 'Atrás' para salir de 'Eventos Regulares' (1400, 2040).")
-	robotgo.Move(1400, 2040)
-	robotgo.Click()
-	time.Sleep(1 * time.Second) // Pausa para que la UI responda
-
-	fmt.Println("Secuencia de preparación de reuniones finalizada.")
+	regresarAlMundoDesdeReuniones()
+	fmt.Println("Secuencia de habilitación de reuniones finalizada.")
 }
 
 // obtenerReunionesPendientes busca el número de reuniones pendientes para un tipo específico.
@@ -611,19 +648,7 @@ func obtenerReunionesPendientes() map[string]int {
 		"Luchador borracho",
 	}
 
-	// 1. Clic en 'Eventos Regulares'
-	robotgo.Move(POS_EVENTOS_REGULARES.X, POS_EVENTOS_REGULARES.Y)
-	robotgo.Click()
-	time.Sleep(1 * time.Second)
-
-	// 2. Clic en la segunda opción ('Reunión de Zombies')
-	clickOpcionEvento(1)
-	time.Sleep(1 * time.Second)
-
-	// 3. Clic en 'Reuniones Automáticas'
-	robotgo.Move(1920, 2040)
-	robotgo.Click()
-	time.Sleep(1 * time.Second)
+	abrirVentanaReunionesAutomaticas()
 
 	// --- Lógica de lectura de tarjetas ---
 	clientOCR := gosseract.NewClient()
@@ -637,6 +662,9 @@ func obtenerReunionesPendientes() map[string]int {
 		titleRect := image.Rect(CARD_TITLE_X_START, cardY, CARD_TITLE_X_END, cardY+CARD_TITLE_HEIGHT)
 		imgTituloBitmap := robotgo.CaptureScreen(titleRect.Min.X, titleRect.Min.Y, titleRect.Dx(), titleRect.Dy())
 		imgTitulo := robotgo.ToImage(imgTituloBitmap)
+		if DEBUG_MODE {
+			imgo.Save("titulo_tarjeta_para_ocr.png", imgTitulo)
+		}
 
 		// Pre-procesamiento
 		nuevoAncho := uint(imgTitulo.Bounds().Dx() * 2)
@@ -655,6 +683,9 @@ func obtenerReunionesPendientes() map[string]int {
 				}
 			}
 		}
+		if DEBUG_MODE {
+			imgo.Save("titulo_tarjeta_procesada.png", imgProcesada)
+		}
 
 		// OCR al título
 		clientOCR.SetImageFromBytes(imgToBytes(imgProcesada))
@@ -669,10 +700,10 @@ func obtenerReunionesPendientes() map[string]int {
 			fmt.Printf("Tarjeta %d: Título detectado: '%s'\n", i, textoTitulo)
 		}
 
-		// Identificar qué tipo de reunión es
+		// Identificar qué tipo de reunión es usando comparación flexible (fuzzy matching)
 		tipoEncontrado := ""
 		for _, t := range tiposSoportados {
-			if strings.Contains(textoTitulo, normalizarTexto(t)) {
+			if esSimilar(textoTitulo, t, 0.75) {
 				tipoEncontrado = t
 				break
 			}
@@ -731,17 +762,7 @@ func obtenerReunionesPendientes() map[string]int {
 
 	// --- Limpieza ---
 	fmt.Println("Regresando a la pantalla del mundo (Limpieza)...")
-	robotgo.Move(2345, 450)
-	robotgo.Click()
-	time.Sleep(1 * time.Second)
-
-	robotgo.Move(1400, 2040)
-	robotgo.Click()
-	time.Sleep(1 * time.Second)
-
-	robotgo.Move(1400, 2040)
-	robotgo.Click()
-	time.Sleep(1 * time.Second)
+	regresarAlMundoDesdeReuniones()
 
 	return resultados
 }
@@ -796,7 +817,7 @@ func irAlMundo() {
 		imgo.Save("identificacion_pantalla_ocr.png", imgProcesada)
 	}
 
-	if strings.Contains(textoNormalizado, "mundo") {
+	if esSimilar(textoNormalizado, "mundo", 0.7) {
 		// Estamos en el Refugio, el botón dice "Mundo"
 		fmt.Println("Estamos en REFUGIO. Navegando a MUNDO...")
 		// Calculamos el centro del área para hacer clic
@@ -872,6 +893,8 @@ func main() {
 
 	close(done)
 	wg.Wait()
+
+	habilitarReunionesAutomaticas()
 
 	fmt.Println("\n¡Rutina de automatización completada y detenida de forma segura!")
 }
