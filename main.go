@@ -34,13 +34,13 @@ var AREA_BUSQUEDA_AYUDA = image.Rect(2290, 1545, 2310, 1545+20)
 // --- CONFIGURACIÓN TAREA: REUNIÓN ---
 const iconoReunionFile = "resources/reunion_icono.png"
 const iconoMasVerdeFile = "resources/mas_verde_icono.png"
-const TOLERANCIA_COLOR_REUNION uint32 = 30000   // Puedes ajustar esta tolerancia si es necesario
-const TOLERANCIA_PIXEL_REUNION = 0.05           // Y también este porcentaje
+const TOLERANCIA_COLOR_REUNION uint32 = 35000   // Puedes ajustar esta tolerancia si es necesario
+const TOLERANCIA_PIXEL_REUNION = 0.10           // Y también este porcentaje
 const TOLERANCIA_COLOR_MAS_VERDE uint32 = 20000 // Puedes ajustar esta tolerancia si es necesario
 const TOLERANCIA_PIXEL_MAS_VERDE = 0.05         // Y también este porcentaje
 
 var AREA_BUSQUEDA_REUNION = image.Rect(1490, 1735, 1770, 1755)
-var AREA_OCR_PARTIR = image.Rect(1836, 1355, 2015, 1420)
+var AREA_OCR_PARTIR = image.Rect(1836, 1462, 2015, 1527)
 var AREA_OCR_REUNION = image.Rect(2380, 1293, 2490, 1323)
 
 // --- CONFIGURACIÓN DE BÚSQUEDA OPTIMIZADA DE BOTÓN VERDE ---
@@ -204,11 +204,11 @@ func buscarYAyudarAliados(wg *sync.WaitGroup, done <-chan bool, pausar chan bool
 			pantallaImg := robotgo.ToImage(bitmap)
 
 			if GUARDAR_PRIMERA_CAPTURA_AYUDA {
-				err := imgo.Save("primera_captura.png", pantallaImg)
+				err := imgo.Save("primera_captura_ayuda.png", pantallaImg)
 				if err != nil {
 					fmt.Println("Error al guardar la captura de pantalla :", err)
 				} else {
-					fmt.Println("Captura de pantalla guardada en 'primera_captura.png'.")
+					fmt.Println("Captura de pantalla guardada en 'primera_captura_ayuda.png'.")
 				}
 				GUARDAR_PRIMERA_CAPTURA_AYUDA = false
 			}
@@ -600,6 +600,7 @@ func obtenerReunionesPendientes() map[string]int {
 		"Zombi Momia [Gigante]": -1,
 		"Zombis de la tundra":   -1,
 		"Caza con Victor":       -1,
+		"Luchador borracho":     -1,
 	}
 
 	tiposSoportados := []string{
@@ -607,6 +608,7 @@ func obtenerReunionesPendientes() map[string]int {
 		"Zombi Momia [Gigante]",
 		"Zombis de la tundra",
 		"Caza con Victor",
+		"Luchador borracho",
 	}
 
 	// 1. Clic en 'Eventos Regulares'
